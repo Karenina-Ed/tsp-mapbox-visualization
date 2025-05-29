@@ -33,8 +33,8 @@ class SearchControl {
     this.map = map;
     this.container.innerHTML = `
       <div class="relative w-96">
-        <input id="search-input" type="text" placeholder="搜索地点" class="w-full p-2 rounded bg-gray-700 text-white border focus:outline-none" autocomplete="off" />
-        <ul id="results" class="absolute z-20 w-full bg-gray-700 border rounded max-h-60 overflow-auto hidden"></ul>
+        <input id="search-input" type="text" placeholder="搜索地点" class="w-full p-2 rounded bg-gray-800 text-white border focus:outline-none" autocomplete="off" />
+        <ul id="results" class="absolute z-20 w-full bg-gray-800 border rounded max-h-100 overflow-auto hidden"></ul>
       </div>
       <button id="optimize" class="px-3 py-1 text-base bg-blue-600 hover:bg-blue-700 text-white rounded">优化路径</button>
       <button id="clear" class="px-3 py-1 text-base bg-red-600 hover:bg-red-700 text-white rounded">清除节点</button>
@@ -103,18 +103,17 @@ export default function TspMapbox() {
   const doSearch = useCallback(async (q) => {
     if (!q) return setResults([]);
     try {
-      const { data } = await axios.get("https://restapi.amap.com/v3/geocode/geo", {
-        params: { key: AMAP_TOKEN, address: q, city: "杭州", output: "JSON" }
+      const { data } = await axios.get("https://restapi.amap.com/v3/assistant/inputtips", {
+        params: { key: AMAP_TOKEN, keywords: q, city: "杭州", datatype: "all" }
       });
       if (data.status !== "1") throw new Error(data.info);
-      const list = data.geocodes.map(g => {
-        const [lng, lat] = g.location.split(",").map(Number);
-        return { place_name: g.formatted_address, center: [lng, lat] };
+      const list = data.tips.filter(t => t.location).map(t => {
+        const [lng, lat] = t.location.split(",").map(Number);
+        return { place_name: t.name + (t.district ? `（${t.district}）` : ''), center: [lng, lat] };
       });
       setResults(list);
-      setError("");
+      setError(list.length ? "" : "未找到匹配地点，请尝试更准确的名称或地标");
     } catch (e) {
-      console.error(e);
       setError("搜索失败: " + e.message);
     }
   }, []);
@@ -194,8 +193,10 @@ export default function TspMapbox() {
     <>
       {/* 错误提示 */}
       {error && (
-        <div className="absolute top-2 left-2 bg-red-600 text-white p-2 rounded z-30">
-          {error}
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="bg-red-600 text-white p-3 rounded shadow-xl min-w-60 text-center">
+            {error}
+          </div>
         </div>
       )}
   
