@@ -6,7 +6,7 @@ import axios from "axios";
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
 
 // 高德 API 密钥
-const AMAP_TOKEN = "19283f3a70f51fabbee21e4acf8863bb";
+const AMAP_TOKEN = process.env.REACT_APP_AMAP_KEY;
 
 // 自定义搜索控件类
 class SearchControl {
