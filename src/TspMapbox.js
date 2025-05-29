@@ -36,8 +36,8 @@ class SearchControl {
         <input id="search-input" type="text" placeholder="搜索地点" class="w-full p-2 rounded bg-gray-700 text-white border focus:outline-none" autocomplete="off" />
         <ul id="results" class="absolute z-20 w-full bg-gray-700 border rounded max-h-60 overflow-auto hidden"></ul>
       </div>
-      <button id="optimize" class="px-3 py-1 text-base bg-green-600 hover:bg-green-700 text-white rounded">优化路径</button>
-      <button id="clear" class="px-3 py-1 text-base bg-blue-600 hover:bg-blue-700 text-white rounded">清除节点</button>
+      <button id="optimize" class="px-3 py-1 text-base bg-blue-600 hover:bg-blue-700 text-white rounded">优化路径</button>
+      <button id="clear" class="px-3 py-1 text-base bg-red-600 hover:bg-red-700 text-white rounded">清除节点</button>
     `;
     this.container.addEventListener("click", (e) => {
       const t = e.target;
@@ -89,7 +89,7 @@ export default function TspMapbox() {
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
-  // backend optimize
+  // 优化路径函数
   const optimizePath = useCallback(async (pts) => {
     const { data } = await axios.post(
       "http://10.12.58.42:8000/optimize_path",
@@ -99,7 +99,7 @@ export default function TspMapbox() {
     return data.tour;
   }, []);
 
-  // geocode search
+  // 搜索函数
   const doSearch = useCallback(async (q) => {
     if (!q) return setResults([]);
     try {
@@ -120,7 +120,7 @@ export default function TspMapbox() {
   }, []);
   const debouncedSearch = useDebounce(doSearch, 300);
 
-  // select from list
+  // 选择地点回调
   const onSelect = useCallback((p) => {
     setNodes(prev => [...prev, [p.center[1], p.center[0]]]);
     setResults([]);
@@ -128,16 +128,16 @@ export default function TspMapbox() {
     mapRef.current.flyTo({ center: p.center, zoom: 12 });
   }, []);
 
-  // update control display
+  // 更新控制器
   useEffect(() => {
     if (controlRef.current && loaded) controlRef.current.update(results);
   }, [results, loaded]);
 
-  // render nodes and path
+  // 更新地图数据
   useEffect(() => {
     if (!loaded) return;
     const map = mapRef.current;
-    // nodes
+    // 更新节点数据
     const nodesData = { type: "FeatureCollection", features: nodes.map((n,i) => ({ type: "Feature", geometry: { type: "Point", coordinates: [n[1],n[0]] }, properties: { id:i } })) };
     if (map.getSource("nodes")) map.getSource("nodes").setData(nodesData);
     else {
@@ -145,7 +145,7 @@ export default function TspMapbox() {
       map.addLayer({ id: "nodes", type: "circle", source: "nodes", paint: { "circle-radius": 8, "circle-color": "#00E5FF" } });
       map.addLayer({ id: "labels", type: "symbol", source: "nodes", layout: { "text-field": ["get","id"], "text-offset": [0,1.5], "text-size": 12 }, paint: { "text-color": "#fff" } });
     }
-    // path
+    // 更新路径数据
     if (path.length > 1) {
       const coords = path.map(i => [nodesRef.current[i][1], nodesRef.current[i][0]]);
       coords.push(coords[0]);
@@ -160,7 +160,7 @@ export default function TspMapbox() {
     }
   }, [path, loaded, nodes]);
 
-  // init map once
+  // 初始化地图
   useEffect(() => {
     mapboxgl.accessToken = MAPBOX_TOKEN;
     const map = new mapboxgl.Map({ container: mapRoot.current, style: "mapbox://styles/yejiangtao/cmaw786m0000h01sw7ugicjkv", center: [120.1551,30.2741], zoom: 10 });
@@ -192,7 +192,40 @@ export default function TspMapbox() {
 
   return (
     <>
-      {error && <div className="absolute top-2 left-2 bg-red-600 text-white p-2 rounded z-30">{error}</div>}
+      {/* 错误提示 */}
+      {error && (
+        <div className="absolute top-2 left-2 bg-red-600 text-white p-2 rounded z-30">
+          {error}
+        </div>
+      )}
+  
+      {/* 加载动画（地图未加载时显示） */}
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center z-40 bg-black bg-opacity-30 pointer-events-none">
+          <div className="flex flex-col items-center">
+            {/* 旋转的圆圈动画 */}
+            <svg className="animate-spin h-12 w-12 text-blue-400 mb-3" viewBox="0 0 24 24">
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+              />
+            </svg>
+            <span className="text-white text-lg">地图加载中...</span>
+          </div>
+        </div>
+      )}
+  
+      {/* 地图容器 */}
       <div ref={mapRoot} className="absolute inset-0" />
     </>
   );
