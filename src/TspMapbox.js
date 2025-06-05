@@ -2,91 +2,16 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import axios from "axios";
+import { data } from "autoprefixer";
+import { gcj02ToWgs84, wgs84ToGcj02 } from './utils/coordTransform'
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
 const AMAP_TOKEN = process.env.REACT_APP_AMAP_KEY;
 if (!MAPBOX_TOKEN) console.error("缺少 Mapbox 令牌: 设置 REACT_APP_MAPBOX_TOKEN");
 if (!AMAP_TOKEN) console.error("缺少高德 API 密钥: 设置 REACT_APP_AMAP_KEY");
 
-// GCJ-02转WGS-84（高德坐标转mapbox坐标）
-function gcj02ToWgs84(lng, lat) {
-  const PI = 3.14159265358979324;
-  const a = 6378245.0;
-  const ee = 0.00669342162296594323;
 
-  function transformLat(x, y) {
-    let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
-    ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
-    ret += (20.0 * Math.sin(y * PI) + 40.0 * Math.sin(y / 3.0 * PI)) * 2.0 / 3.0;
-    ret += (160.0 * Math.sin(y / 12.0 * PI) + 320.0 * Math.sin(y * PI / 30.0)) * 2.0 / 3.0;
-    return ret;
-  }
 
-  function transformLng(x, y) {
-    let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
-    ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
-    ret += (20.0 * Math.sin(x * PI) + 40.0 * Math.sin(x / 3.0 * PI)) * 2.0 / 3.0;
-    ret += (150.0 * Math.sin(x / 12.0 * PI) + 300.0 * Math.sin(x / 30.0 * PI)) * 2.0 / 3.0;
-    return ret;
-  }
-
-  function outOfChina(lng, lat) {
-    return (lng < 72.004 || lng > 137.8347) || (lat < 0.8293 || lat > 55.8271);
-  }
-
-  if (outOfChina(lng, lat)) return [lng, lat];
-
-  let dLat = transformLat(lng - 105.0, lat - 35.0);
-  let dLng = transformLng(lng - 105.0, lat - 35.0);
-  const radLat = lat / 180.0 * PI;
-  let magic = Math.sin(radLat);
-  magic = 1 - ee * magic * magic;
-  const sqrtMagic = Math.sqrt(magic);
-  dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * PI);
-  dLng = (dLng * 180.0) / (a / sqrtMagic * Math.cos(radLat) * PI);
-  const mgLat = lat + dLat;
-  const mgLng = lng + dLng;
-  return [lng * 2 - mgLng, lat * 2 - mgLat];
-}
-
-// WGS-84转GCJ-02（mapbox点转高德API点）
-function wgs84ToGcj02(lng, lat) {
-  const PI = 3.14159265358979324;
-  const a = 6378245.0;
-  const ee = 0.00669342162296594323;
-
-  function transformLat(x, y) {
-    let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
-    ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
-    ret += (20.0 * Math.sin(y * PI) + 40.0 * Math.sin(y / 3.0 * PI)) * 2.0 / 3.0;
-    ret += (160.0 * Math.sin(y / 12.0 * PI) + 320.0 * Math.sin(y * PI / 30.0)) * 2.0 / 3.0;
-    return ret;
-  }
-
-  function transformLng(x, y) {
-    let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
-    ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
-    ret += (20.0 * Math.sin(x * PI) + 40.0 * Math.sin(x / 3.0 * PI)) * 2.0 / 3.0;
-    ret += (150.0 * Math.sin(x / 12.0 * PI) + 300.0 * Math.sin(x / 30.0 * PI)) * 2.0 / 3.0;
-    return ret;
-  }
-
-  function outOfChina(lng, lat) {
-    return (lng < 72.004 || lng > 137.8347) || (lat < 0.8293 || lat > 55.8271);
-  }
-
-  if (outOfChina(lng, lat)) return [lng, lat];
-
-  let dLat = transformLat(lng - 105.0, lat - 35.0);
-  let dLng = transformLng(lng - 105.0, lat - 35.0);
-  const radLat = lat / 180.0 * PI;
-  let magic = Math.sin(radLat);
-  magic = 1 - ee * magic * magic;
-  const sqrtMagic = Math.sqrt(magic);
-  dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * PI);
-  dLng = (dLng * 180.0) / (a / sqrtMagic * Math.cos(radLat) * PI);
-  return [lng + dLng, lat + dLat];
-}
 
 function useDebounce(fn, delay) {
   const timeoutRef = useRef(null);
@@ -150,6 +75,101 @@ class SearchControl {
     this.map = null;
   }
 }
+/**
+ * 将完整闭环路径拆分成多个子段，每段最多 maxPoints 个点（高德限 16）
+ * @param {Array<[number, number]>} fullLoopPts GCJ 坐标闭环数组，例如 [[lng0,lat0], [lng1,lat1], …, [lng0,lat0]]
+ * @param {number} maxPoints  最大点数（默认 16）
+ * @returns {Array<Array<[number, number]>>}  拆分后的各段数组
+ */
+function splitLoopsIntoSegments(fullLoopPts, maxPoints = 16) {
+  const segments = [];
+  let i = 0;
+  while (i < fullLoopPts.length - 1) {
+    // 如果剩余的点小于等于 maxPoints，直接把剩下所有点当最后一段
+    if (fullLoopPts.length - i <= maxPoints) {
+      segments.push(fullLoopPts.slice(i));
+      break;
+    }
+    // 否则截取 i 到 i + maxPoints - 1（共 maxPoints 个点）作为当前段
+    const sliceEnd = i + maxPoints - 1;
+    segments.push(fullLoopPts.slice(i, sliceEnd + 1));
+    // 下一段从当前段的最后一个点开始（重叠一个点）
+    i = sliceEnd;
+  }
+  return segments;
+}
+
+/**
+ * 查询单段驾车路径，返回 WGS84 坐标折线
+ * @param {Array<[number, number]>} segmentPts GCJ 坐标数组，长度 2~16
+ * @returns {Promise<Array<[number, number]>>}  WGS84 坐标折线
+ */
+async function fetchSegmentRoute(segmentPts) {
+  if (!segmentPts || segmentPts.length < 2) return [];
+
+  const origin = segmentPts[0].join(",");
+  const destination = segmentPts[segmentPts.length - 1].join(",");
+  const waypoints =
+    segmentPts.length > 2
+      ? segmentPts.slice(1, -1).map((p) => p.join(",")).join(";")
+      : "";
+
+  try {
+    const res = await axios.get("https://restapi.amap.com/v3/direction/driving", {
+      params: {
+        key: AMAP_TOKEN,
+        origin,
+        destination,
+        waypoints,
+        extensions: "all",
+      },
+    });
+    if (res.data.status !== "1") {
+      throw new Error(res.data.info || "未知错误");
+    }
+    // 解析 polyline，注意高德返回的是 GCJ-02，需要转成 WGS84
+    const steps = res.data.route.paths[0].steps;
+    let coords = [];
+    for (const step of steps) {
+      const pts = step.polyline.split(";").map((str) => {
+        const [lng, lat] = str.split(",").map(Number);
+        return gcj02ToWgs84(lng, lat);
+      });
+      coords = coords.concat(pts);
+    }
+    return coords;
+  } catch (err) {
+    console.error("fetchSegmentRoute 出错：", err);
+    throw err;
+  }
+}
+
+/**
+ * 对所有子段依次调用驾车规划并拼接成一条完整折线
+ * @param {Array<Array<[number, number]>>} segments 拆分后的多段 GCJ 数组
+ * @returns {Promise<Array<[number, number]>>}  完整 WGS84 折线
+ */
+async function fetchFullRouteByChunks(segments) {
+  const fullCoords = [];
+  for (let idx = 0; idx < segments.length; idx++) {
+    const segment = segments[idx];
+    try {
+      const segCoords = await fetchSegmentRoute(segment);
+      if (segCoords.length === 0) continue;
+      // 第一段直接所有坐标都 push
+      if (idx === 0) {
+        fullCoords.push(...segCoords);
+      } else {
+        // 后续段需要跳过第一个点，因为与上一段末尾重复
+        fullCoords.push(...segCoords.slice(1));
+      }
+    } catch (err) {
+      console.error(`第 ${idx + 1} 段驾车规划失败`, err);
+      throw err;
+    }
+  }
+  return fullCoords;
+}
 
 export default function TspMapbox() {
   const mapRoot = useRef(null);
@@ -160,6 +180,7 @@ export default function TspMapbox() {
   const [nodes, setNodes] = useState([]);
   const [results, setResults] = useState([]);
   const [error, setError] = useState("");
+  const [planning, setPlanning] = useState(false);
 
   const nodesRef = useRef(nodes);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
@@ -187,7 +208,7 @@ export default function TspMapbox() {
       setResults(list);
       setError(list.length ? "" : "未找到匹配地点，请尝试更准确的名称或地标");
     } catch (e) {
-      setError("搜索失败: " + e.message);
+      setError("搜索失败: " + e.message + "返回状态: " + data?.status);
     }
   }, []);
   const debouncedSearch = useDebounce(doSearch, 300);
@@ -202,43 +223,6 @@ export default function TspMapbox() {
   useEffect(() => {
     if (controlRef.current && loaded) controlRef.current.update(results);
   }, [results, loaded]);
-
-  async function fetchDrivingRoute(points) {
-    if (points.length < 2) return null;
-    const origin = points[0].join(",");
-    const destination = points[0].join(","); // 终点同起点
-    const waypoints = points.length > 2 ? points.slice(1, -1).map(p => p.join(",")).join(";") : "";
-    try {
-      const res = await axios.get("https://restapi.amap.com/v3/direction/driving", {
-        params: {
-          key: AMAP_TOKEN,
-          origin,
-          destination,
-          waypoints,
-          extensions: "all"
-        }
-      });
-      if (res.data.status !== "1") throw new Error(res.data.info);
-      return res.data.route;
-    } catch (error) {
-      setError("路线规划失败: " + error.message);
-      return null;
-    }
-  }
-
-  function parseRoutePolyline(route) {
-    if (!route.paths || route.paths.length === 0) return [];
-    const steps = route.paths[0].steps;
-    let coords = [];
-    steps.forEach(step => {
-      const pts = step.polyline.split(";").map(str => {
-        const [lng, lat] = str.split(",").map(Number);
-        return gcj02ToWgs84(lng, lat);
-      });
-      coords = coords.concat(pts);
-    });
-    return coords;
-  }
 
   useEffect(() => {
     if (!loaded) return;
@@ -286,50 +270,116 @@ export default function TspMapbox() {
         debouncedSearch,
         onSelect,
         async () => {
-          const ptsGCJ = nodesRef.current.map(([lat, lng]) => {
-            const [lngGCJ, latGCJ] = wgs84ToGcj02(lng, lat);
-            return [lngGCJ, latGCJ];
-          });
-          if (ptsGCJ.length < 2) return setError("至少需要2个节点");
           setError("");
-          const tour = await optimizePath(ptsGCJ);
-          // 按顺序排列的 GCJ02 点
-          const orderedPointsGCJ = tour.map(i => ptsGCJ[i]);
-
-          // 环路：把起点添加到末尾
-          const loopPointsGCJ = [...orderedPointsGCJ, orderedPointsGCJ[0]];
-
-          // 请求高德驾车路径规划
-          const route = await fetchDrivingRoute(loopPointsGCJ);
-          if (!route) return;
-
-          const routeCoords = parseRoutePolyline(route);
-
-          const routeGeoJSON = {
-            type: "Feature",
-            geometry: {
-              type: "LineString",
-              coordinates: routeCoords
+          setPlanning(true);
+          try {
+            // 1. WGS84 转 GCJ02
+            const ptsGCJ = nodesRef.current.map(([lat, lng]) => {
+              const [gcjLng, gcjLat] = wgs84ToGcj02(lng, lat);
+              return [gcjLng, gcjLat];
+            });
+            if (ptsGCJ.length < 2) {
+              setError("至少需要 2 个节点");
+              return;
             }
-          };
 
-          if (map.getLayer("driving-route")) map.removeLayer("driving-route");
+            // 2. TSP 优化，拿到最优访问顺序
+            const tour = await optimizePath(ptsGCJ);
+
+            // 3. 按 tour 顺序构造闭环，再加回起点
+            const orderedPointsGCJ = tour.map((i) => ptsGCJ[i]);
+            const loopPointsGCJ = [...orderedPointsGCJ, orderedPointsGCJ[0]];
+
+            // 4. 拆分成多段，每段 ≤ 16 个点
+            const segments = splitLoopsIntoSegments(loopPointsGCJ, 16);
+
+            // 5. 异步依次请求各段驾车规划，并拼接成完整折线
+            const fullRouteCoords = await fetchFullRouteByChunks(segments);
+            if (fullRouteCoords.length === 0) {
+              setError("无法获取驾车路线");
+              return;
+            }
+
+            // 6. 在地图上渲染这条完整折线
+            const routeGeoJSON = {
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: fullRouteCoords,
+              },
+            };
+
+          if (map.getLayer("line-background")) map.removeLayer("line-background");
+          if (map.getLayer("line-dashed")) map.removeLayer("line-dashed");
           if (map.getSource("driving-route")) map.removeSource("driving-route");
 
           map.addSource("driving-route", { type: "geojson", data: routeGeoJSON });
           map.addLayer({
-            id: "driving-route",
+            id: "line-background",
             type: "line",
             source: "driving-route",
             layout: { "line-join": "round", "line-cap": "round" },
-            paint: { "line-color": "#1E90FF", "line-width": 5 }
+            paint: { "line-color": "#69b4ff", "line-width": 5 }
           });
+          map.addLayer({
+            id: "line-dashed",
+            type: "line",
+            source: "driving-route",
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: { "line-color": "#1f2937", 'line-dasharray': [0, 4, 3], 'line-width': 4}
+          });
+          const dashArraySequence = [
+            [0, 4, 3],
+            [0.5, 4, 2.5],
+            [1, 4, 2],
+            [1.5, 4, 1.5],
+            [2, 4, 1],
+            [2.5, 4, 0.5],
+            [3, 4, 0],
+            [0, 0.5, 3, 3.5],
+            [0, 1, 3, 3],
+            [0, 1.5, 3, 2.5],
+            [0, 2, 3, 2],
+            [0, 2.5, 3, 1.5],
+            [0, 3, 3, 1],
+            [0, 3.5, 3, 0.5]
+        ];
+        let step = 0;
+
+        function animateDashArray(timestamp) {
+            // 更新线条的 dasharray 属性以创建动画效果
+            // 使用 modulo 运算符来循环 dashArraySequence 数组
+            
+            if (!map.getLayer('line-dashed')) return;
+            const newStep = parseInt(
+                (timestamp / 100) % dashArraySequence.length
+            );
+
+            if (newStep !== step) {
+                map.setPaintProperty(
+                    'line-dashed',
+                    'line-dasharray',
+                    dashArraySequence[step]
+                );
+                step = newStep;
+            }
+
+            // 递归调用以继续动画
+            requestAnimationFrame(animateDashArray);
+        }
+
+        // 开始动画
+        animateDashArray(0);
+        } finally {
+          setPlanning(false);
+        }
         },
         () => {
           setNodes([]);
           setResults([]);
           setError("");
-          if (map.getLayer("driving-route")) map.removeLayer("driving-route");
+          if (map.getLayer("line-background")) map.removeLayer("line-background");
+          if (map.getLayer("line-dashed")) map.removeLayer("line-dashed");
           if (map.getSource("driving-route")) map.removeSource("driving-route");
         }
       );
@@ -337,7 +387,18 @@ export default function TspMapbox() {
       controlRef.current = ctrl;
     });
     map.on("click", e => setNodes(prev => [...prev, [e.lngLat.lat, e.lngLat.lng]]));
-    map.on("contextmenu", () => setNodes(prev => prev.slice(0, -1)));
+    map.on("contextmenu", e => {
+      // 1. 在 "nodes" 图层里查询点击位置上的要素
+      const features = map.queryRenderedFeatures(e.point, { layers: ["nodes"] });
+      if (features.length === 0) {
+        // 如果没有点击到任何节点，就不做操作
+        return;
+      }
+      // 2. 取第一个被点击到的节点的 id（我们渲染时把 idx 写到了 feature.properties.id）
+      const idToRemove = features[0].properties.id;
+      // 3. 从 nodes 数组里把这个索引过滤掉
+      setNodes(prev => prev.filter((_, idx) => idx !== idToRemove));
+    });
     map.on("error", e => setError(e.error?.message || "地图错误"));
     return () => map.remove();
   }, [debouncedSearch, onSelect, optimizePath]);
@@ -374,6 +435,30 @@ export default function TspMapbox() {
           </div>
         </div>
       )}
+      {planning && (
+        <div className="absolute inset-0 flex items-center justify-center z-40 bg-black bg-opacity-30 pointer-events-none">
+          <div className="flex flex-col items-center">
+            <svg className="animate-spin h-12 w-12 text-blue-400 mb-3" viewBox="0 0 24 24">
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+              />
+            </svg>
+            <span className="text-white text-lg">正在规划路径...</span>
+          </div>
+        </div>
+      )}
+      
       <div ref={mapRoot} className="absolute inset-0" />
     </>
   );
