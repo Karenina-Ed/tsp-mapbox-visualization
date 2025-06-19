@@ -8,16 +8,20 @@ import { gcj02ToWgs84, wgs84ToGcj02 } from './utils/coordTransform';
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
 const AMAP_TOKEN = process.env.REACT_APP_AMAP_KEY;
 const OPTIMIZE_API = "http://10.12.58.42:8000/optimize_path";
-
+const nameCache = new Map();
 // --- 工具函数 ---
 async function reverseGeocode(lat, lng) {
+  const key = `${lat},${lng}`;
+  if (nameCache.has(key)) return nameCache.get(key);
   try {
     const [gcjLng, gcjLat] = wgs84ToGcj02(lng, lat);
     const res = await axios.get("https://restapi.amap.com/v3/geocode/regeo", {
       params: { key: AMAP_TOKEN, location: `${gcjLng},${gcjLat}`, extensions: "all" },
     });
     if (res.data.status !== "1") throw new Error(res.data.info || "逆地理编码失败");
-    return res.data.regeocode.formatted_address || "未知地点";
+    const name = res.data.regeocode.formatted_address || "未知地点";
+    nameCache.set(key, name);
+    return name;
   } catch {
     return "未知地点";
   }
@@ -360,6 +364,13 @@ export default function TspMapbox() {
     };
   }, [loaded, handleAddNode, handleDeleteNode]);
 
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const handleClearNodes = async () => {
     setNodes([]);
     setNodeNames([]);
@@ -441,7 +452,7 @@ export default function TspMapbox() {
           />
           {searchLoading && <div className="text-sm text-gray-400 pl-2 mt-1">搜索中...</div>}
           {searchResults.length > 0 && (
-            <ul className="absolute z-30 w-full bg-white text-gray-800 rounded-lg max-h-120 overflow-auto shadow-md top-full mt-1 border border-gray-200">
+            <ul className="absolute z-30 w-full bg-white text-gray-800 rounded-lg max-h-96 overflow-auto shadow-md top-full mt-1 border border-gray-200">
               {searchResults.map((r, i) => (
                 <li
                   key={i}
@@ -455,53 +466,63 @@ export default function TspMapbox() {
       </div>
 
       {/* 右侧节点列表 */}
-      <div className="absolute top-4 right-16 w-96 bg-white rounded-lg shadow-md p-4 z-50 max-h-[80vh] overflow-y-auto">
+      <div className="absolute top-4 right-16 w-96 bg-white rounded-lg shadow-md p-4 z-50 max-h-[80vh] flex flex-col">
         <h3 className="text-lg font-bold text-gray-800 mb-3">已选节点</h3>
         {nodes.length === 0 ? (
           <p className="text-gray-500 italic">暂无节点，请点击地图或搜索添加</p>
         ) : (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="nodes">
-              {(provided) => (
-                <ul {...provided.droppableProps} ref={provided.innerRef}>
-                  {nodes.map((node, index) => (
-                    <Draggable key={index} draggableId={`node-${index}`} index={index}>
-                      {(provided) => (
-                        <li
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          className={`flex items-center justify-between p-2 rounded-lg mb-2 transition duration-150 ease-in-out relative cursor-pointer 
-                            ${selectedIndex === index ? 'bg-indigo-100 border-2 border-indigo-400' : 'bg-gray-50 hover:bg-gray-100'}`}
+          // 节点列表区域：占据剩余空间并可滚动
+          <div className="flex-1 overflow-y-auto mb-4"> {/* 关键：flex-1 填充剩余空间，overflow-y-auto 滚动 */}
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <Droppable droppableId="nodes">
+                {(provided) => (
+                  <ul 
+                    {...provided.droppableProps} 
+                    ref={provided.innerRef}
+                    className="space-y-2" // 替代 mb-2，避免外层 margin 影响滚动
+                  >
+                    {nodes.map((node, index) => (
+                      <Draggable key={index} draggableId={`node-${index}`} index={index}>
+                        {(provided) => (
+                          <li
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={`flex items-center justify-between p-2 rounded-lg transition duration-150 ease-in-out relative cursor-pointer 
+                              ${selectedIndex === index ? 'bg-indigo-100 border-2 border-indigo-400' : 'bg-gray-50 hover:bg-gray-100'}`}
                             onClick={() => {
                               setSelectedIndex(index);
                               if (mapRef.current) {
                                 mapRef.current.flyTo({ center: [node[1], node[0]], zoom: 10});
                               }
                             }}
-                        >
-                          <span className="text-gray-700">{`${index + 1}. ${nodeNames[index] || "加载中..."}`}</span>
-                          <button
-                            onClick={() => handleDeleteNode(index)}
-                            className="text-red-500 hover:text-red-700 transition duration-150"
                           >
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </li>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </ul>
-              )}
-            </Droppable>
-          </DragDropContext>
+                            <span className="text-gray-700">{`${index + 1}. ${nodeNames[index] || "加载中..."}`}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation(); // 防止点击删除按钮时触发列表项的点击事件
+                                handleDeleteNode(index);
+                              }}
+                              className="text-red-500 hover:text-red-700 transition duration-150"
+                            >
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </li>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </ul>
+                )}
+              </Droppable>
+            </DragDropContext>
+          </div>
         )}
 
-        {/* 按钮区，只保留一个“优化路径”按钮 */}
-        <div className="flex gap-2 mt-4">
+        {/* 按钮区：固定在底部，不参与滚动 */}
+        <div className="flex gap-2">
           <button
             onClick={handleOptimizeAndPlanRoute}
             disabled={nodes.length < 2 || planning}
